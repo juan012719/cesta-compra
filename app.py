@@ -21,11 +21,10 @@ response_lista = requests.get(f"{URL}/rest/v1/lista_compra?order=fecha_creacion.
 items_lista = response_lista.json() if response_lista.status_code == 200 else []
 
 # Lista para detectar duplicados
-nombres_en_lista = [i["producto"].lower() for i in items_lista]
+nombres_en_lista = [i["producto"].lower() for i in items_lista if "producto" in i]
 
 st.title("🛒 Cesta de la Compra")
 
-# --- AQUÍ CAMBIAMOS EL ORDEN: "Mi Lista" pasa a ser la primera ---
 tab_lista, tab_comprar, tab_despensa = st.tabs(["📝 Mi Lista", "➕ Añadir", "📦 Despensa"])
 
 # ==========================================
@@ -39,12 +38,18 @@ with tab_lista:
     st.divider()
 
     st.subheader("📝 Pendientes")
-    for item in [i for i in items_lista if not i["comprado"]]:
+    # Usamos .get("comprado", False) por si la columna no existe en la base de datos
+    for item in [i for i in items_lista if not i.get("comprado", False)]:
         col_check, col_del = st.columns([8, 2])
         with col_check:
+            # Si se marca la casilla...
             if st.checkbox(item["producto"], key=f"pend_{item['id']}"):
-                requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": True}, headers=HEADERS)
-                st.rerun()
+                res = requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": True}, headers=HEADERS)
+                if res.status_code in [200, 204]:
+                    st.rerun()
+                else:
+                    # ¡AQUÍ ESTÁ EL CHIVATO!
+                    st.error(f"Fallo en Supabase: {res.text}")
         with col_del:
             if st.button("❌", key=f"del_{item['id']}"):
                 requests.delete(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", headers=HEADERS)
@@ -53,12 +58,16 @@ with tab_lista:
     st.divider()
     
     st.subheader("🛒 En el carro")
-    for item in [i for i in items_lista if i["comprado"]]:
+    for item in [i for i in items_lista if i.get("comprado", False)]:
         col_check, col_del = st.columns([8, 2])
         with col_check:
-            if st.checkbox(item["producto"], value=True, key=f"comp_{item['id']}"):
-                requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": False}, headers=HEADERS)
-                st.rerun()
+            # Si se desmarca la casilla...
+            if not st.checkbox(item["producto"], value=True, key=f"comp_{item['id']}"):
+                res = requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": False}, headers=HEADERS)
+                if res.status_code in [200, 204]:
+                    st.rerun()
+                else:
+                    st.error(f"Fallo en Supabase: {res.text}")
         with col_del:
             if st.button("❌", key=f"del_comp_{item['id']}"):
                 requests.delete(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", headers=HEADERS)
