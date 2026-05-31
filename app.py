@@ -1,8 +1,10 @@
 import streamlit as st
 import requests
 
+# Configuración de página
 st.set_page_config(page_title="Cesta", page_icon="🛒", layout="centered")
 
+# Credenciales desde los secretos de Streamlit
 URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 
@@ -13,7 +15,7 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-# --- DESCARGAR DATOS ---
+# --- LÓGICA DE DATOS ---
 resp_catalogo = requests.get(f"{URL}/rest/v1/catalogo?order=nombre.asc", headers=HEADERS)
 productos_habituales = [item["nombre"] for item in resp_catalogo.json()] if resp_catalogo.status_code == 200 else []
 
@@ -22,47 +24,42 @@ items_lista = response_lista.json() if response_lista.status_code == 200 else []
 
 nombres_en_lista = [i["producto"].lower() for i in items_lista if "producto" in i]
 
-st.title("🛒 Cesta")
+st.title("🛒 Cesta de la Compra")
 
+# Pestañas
 tab_lista, tab_comprar, tab_despensa = st.tabs(["📝 Lista", "➕ Añadir", "📦 Base de datos"])
 
-# ==========================================
-# PESTAÑA 1: LISTA (Optimizada para móvil)
-# ==========================================
+# --- PESTAÑA 1: MI LISTA ---
 with tab_lista:
-    if st.button("🗑️ Vaciar lista", type="primary", use_container_width=True):
+    if st.button("🗑️ Vaciar toda la lista", type="primary", use_container_width=True):
         requests.delete(f"{URL}/rest/v1/lista_compra?id=gt.0", headers=HEADERS)
         st.rerun()
         
     st.subheader("Pendientes")
     for item in [i for i in items_lista if not i.get("comprado", False)]:
-        # Usamos contenedores para forzar que queden alineados
-        with st.container():
-            c1, c2 = st.columns([0.85, 0.15])
-            if c1.checkbox(item["producto"], key=f"pend_{item['id']}"):
-                requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": True}, headers=HEADERS)
-                st.rerun()
-            if c2.button("❌", key=f"del_{item['id']}"):
-                requests.delete(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", headers=HEADERS)
-                st.rerun()
+        c1, c2 = st.columns([4, 1])
+        if c1.button(f"⬜ {item['producto']}", key=f"pend_{item['id']}", use_container_width=True):
+            requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": True}, headers=HEADERS)
+            st.rerun()
+        if c2.button("❌", key=f"del_{item['id']}", use_container_width=True):
+            requests.delete(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", headers=HEADERS)
+            st.rerun()
 
     st.subheader("🛒 En el carro")
     for item in [i for i in items_lista if i.get("comprado", False)]:
-        with st.container():
-            c1, c2 = st.columns([0.85, 0.15])
-            if not c1.checkbox(item["producto"], value=True, key=f"comp_{item['id']}"):
-                requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": False}, headers=HEADERS)
-                st.rerun()
-            if c2.button("❌", key=f"del_comp_{item['id']}"):
-                requests.delete(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", headers=HEADERS)
-                st.rerun()
+        c1, c2 = st.columns([4, 1])
+        if c1.button(f"✅ {item['producto']}", key=f"comp_{item['id']}", use_container_width=True):
+            requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": False}, headers=HEADERS)
+            st.rerun()
+        if c2.button("❌", key=f"del_comp_{item['id']}", use_container_width=True):
+            requests.delete(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", headers=HEADERS)
+            st.rerun()
 
-# ==========================================
-# PESTAÑA 2: AÑADIR (Botones más compactos)
-# ==========================================
+# --- PESTAÑA 2: AÑADIR ---
 with tab_comprar:
+    st.subheader("⚡ Añadir rápido")
     if productos_habituales:
-        cols = st.columns(2) # 2 columnas es más seguro para móviles
+        cols = st.columns(2) 
         for i, prod in enumerate(productos_habituales):
             ya_esta = prod.lower() in nombres_en_lista
             if cols[i % 2].button(prod, key=f"cat_{i}", disabled=ya_esta, use_container_width=True):
@@ -70,17 +67,22 @@ with tab_comprar:
                 st.rerun()
     
     st.divider()
-    producto_nuevo = st.text_input("✍️ Producto puntual:")
+    producto_nuevo = st.text_input("✍️ O escribir algo puntual:")
     if st.button("Añadir a la lista", use_container_width=True):
         if producto_nuevo != "":
             requests.post(f"{URL}/rest/v1/lista_compra", json={"producto": producto_nuevo}, headers=HEADERS)
             st.rerun()
 
-# ==========================================
-# PESTAÑA 3: DESPENSA
-# ==========================================
+# --- PESTAÑA 3: DESPENSA ---
 with tab_despensa:
-    nuevo_catalogo = st.text_input("Nuevo producto fijo:")
+    st.subheader("Gestionar habituales")
+    nuevo_catalogo = st.text_input("Nombre del producto:")
     if st.button("Guardar en despensa", use_container_width=True):
-        requests.post(f"{URL}/rest/v1/catalogo", json={"nombre": nuevo_catalogo}, headers=HEADERS)
-        st.rerun()
+        if nuevo_catalogo != "":
+            requests.post(f"{URL}/rest/v1/catalogo", json={"nombre": nuevo_catalogo}, headers=HEADERS)
+            st.rerun()
+        
+    st.divider()
+    st.write("**Tus productos guardados:**")
+    for p in productos_habituales:
+        st.write(f"- {p}")
