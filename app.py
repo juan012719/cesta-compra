@@ -20,48 +20,19 @@ productos_habituales = [item["nombre"] for item in resp_catalogo.json()] if resp
 response_lista = requests.get(f"{URL}/rest/v1/lista_compra?order=fecha_creacion.desc", headers=HEADERS)
 items_lista = response_lista.json() if response_lista.status_code == 200 else []
 
-# Creamos una lista invisible con los nombres en minúsculas para detectar duplicados
+# Lista para detectar duplicados
 nombres_en_lista = [i["producto"].lower() for i in items_lista]
 
 st.title("🛒 Cesta de la Compra")
 
-# --- TRES PESTAÑAS ---
-tab_comprar, tab_lista, tab_despensa = st.tabs(["➕ Añadir", "📝 Mi Lista", "📦 Despensa"])
+# --- AQUÍ CAMBIAMOS EL ORDEN: "Mi Lista" pasa a ser la primera ---
+tab_lista, tab_comprar, tab_despensa = st.tabs(["📝 Mi Lista", "➕ Añadir", "📦 Despensa"])
 
 # ==========================================
-# PESTAÑA 1: AÑADIR AL CARRO
-# ==========================================
-with tab_comprar:
-    st.subheader("⚡ Añadir rápido")
-    if productos_habituales:
-        cols = st.columns(3) 
-        for i, prod in enumerate(productos_habituales):
-            # Comprobamos si el producto ya está en la lista de la compra
-            ya_esta_añadido = prod.lower() in nombres_en_lista
-            
-            # El botón se desactiva (disabled) si ya está en la lista
-            if cols[i % 3].button(prod, key=f"cat_{i}", disabled=ya_esta_añadido, use_container_width=True):
-                requests.post(f"{URL}/rest/v1/lista_compra", json={"producto": prod}, headers=HEADERS)
-                st.rerun()
-    
-    st.divider()
-    producto_nuevo = st.text_input("✍️ O escribir algo puntual:")
-    if st.button("Añadir a la lista", key="btn_nuevo"):
-        if producto_nuevo != "":
-            # Evitar duplicados por texto
-            if producto_nuevo.lower() in nombres_en_lista:
-                st.warning(f"¡{producto_nuevo} ya está en tu lista!")
-            else:
-                requests.post(f"{URL}/rest/v1/lista_compra", json={"producto": producto_nuevo}, headers=HEADERS)
-                st.rerun()
-
-# ==========================================
-# PESTAÑA 2: LA LISTA DEL SUPERMERCADO
+# PESTAÑA 1: LA LISTA DEL SUPERMERCADO
 # ==========================================
 with tab_lista:
-    # Botón gigante para limpiar todo cuando termines de comprar
     if st.button("🗑️ Vaciar toda la lista", type="primary", use_container_width=True):
-        # Esta orden borra todos los registros de la lista de la compra
         requests.delete(f"{URL}/rest/v1/lista_compra?id=gt.0", headers=HEADERS)
         st.rerun()
         
@@ -69,7 +40,6 @@ with tab_lista:
 
     st.subheader("📝 Pendientes")
     for item in [i for i in items_lista if not i["comprado"]]:
-        # Dividimos la fila: 80% para la casilla, 20% para el botón de borrar
         col_check, col_del = st.columns([8, 2])
         with col_check:
             if st.checkbox(item["producto"], key=f"pend_{item['id']}"):
@@ -95,7 +65,30 @@ with tab_lista:
                 st.rerun()
 
 # ==========================================
-# PESTAÑA 3: GESTIÓN DE TU BASE DE DATOS
+# PESTAÑA 2: AÑADIR PRODUCTOS
+# ==========================================
+with tab_comprar:
+    st.subheader("⚡ Añadir rápido")
+    if productos_habituales:
+        cols = st.columns(3) 
+        for i, prod in enumerate(productos_habituales):
+            ya_esta_añadido = prod.lower() in nombres_en_lista
+            if cols[i % 3].button(prod, key=f"cat_{i}", disabled=ya_esta_añadido, use_container_width=True):
+                requests.post(f"{URL}/rest/v1/lista_compra", json={"producto": prod}, headers=HEADERS)
+                st.rerun()
+    
+    st.divider()
+    producto_nuevo = st.text_input("✍️ O escribir algo puntual:")
+    if st.button("Añadir a la lista", key="btn_nuevo"):
+        if producto_nuevo != "":
+            if producto_nuevo.lower() in nombres_en_lista:
+                st.warning(f"¡{producto_nuevo} ya está en tu lista!")
+            else:
+                requests.post(f"{URL}/rest/v1/lista_compra", json={"producto": producto_nuevo}, headers=HEADERS)
+                st.rerun()
+
+# ==========================================
+# PESTAÑA 3: GESTIÓN DE LA DESPENSA BASE
 # ==========================================
 with tab_despensa:
     st.subheader("Añadir a mis habituales")
