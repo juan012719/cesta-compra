@@ -67,4 +67,49 @@ with tab_lista:
         
     st.divider()
 
-    st.
+    st.subheader("📝 Pendientes")
+    for item in [i for i in items_lista if not i["comprado"]]:
+        # Dividimos la fila: 80% para la casilla, 20% para el botón de borrar
+        col_check, col_del = st.columns([8, 2])
+        with col_check:
+            if st.checkbox(item["producto"], key=f"pend_{item['id']}"):
+                requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": True}, headers=HEADERS)
+                st.rerun()
+        with col_del:
+            if st.button("❌", key=f"del_{item['id']}"):
+                requests.delete(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", headers=HEADERS)
+                st.rerun()
+
+    st.divider()
+    
+    st.subheader("🛒 En el carro")
+    for item in [i for i in items_lista if i["comprado"]]:
+        col_check, col_del = st.columns([8, 2])
+        with col_check:
+            if st.checkbox(item["producto"], value=True, key=f"comp_{item['id']}"):
+                requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": False}, headers=HEADERS)
+                st.rerun()
+        with col_del:
+            if st.button("❌", key=f"del_comp_{item['id']}"):
+                requests.delete(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", headers=HEADERS)
+                st.rerun()
+
+# ==========================================
+# PESTAÑA 3: GESTIÓN DE TU BASE DE DATOS
+# ==========================================
+with tab_despensa:
+    st.subheader("Añadir a mis habituales")
+    nuevo_catalogo = st.text_input("Nombre del producto:")
+    if st.button("Guardar en despensa"):
+        if nuevo_catalogo != "":
+            res = requests.post(f"{URL}/rest/v1/catalogo", json={"nombre": nuevo_catalogo}, headers=HEADERS)
+            if res.status_code in [200, 201]:
+                st.success(f"¡{nuevo_catalogo} añadido a tu despensa!")
+                st.rerun()
+            else:
+                st.error(f"Error al guardar: {res.text}")
+        
+    st.divider()
+    st.write("**Tus productos guardados:**")
+    for p in productos_habituales:
+        st.markdown(f"- {p}")
