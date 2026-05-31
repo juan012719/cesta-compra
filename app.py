@@ -20,98 +20,67 @@ productos_habituales = [item["nombre"] for item in resp_catalogo.json()] if resp
 response_lista = requests.get(f"{URL}/rest/v1/lista_compra?order=fecha_creacion.desc", headers=HEADERS)
 items_lista = response_lista.json() if response_lista.status_code == 200 else []
 
-# Lista para detectar duplicados
 nombres_en_lista = [i["producto"].lower() for i in items_lista if "producto" in i]
 
-st.title("🛒 Cesta de la Compra")
+st.title("🛒 Cesta")
 
-tab_lista, tab_comprar, tab_despensa = st.tabs(["📝 Mi Lista", "➕ Añadir", "📦 Despensa"])
+tab_lista, tab_comprar, tab_despensa = st.tabs(["📝 Lista", "➕ Añadir", "📦 Base de datos"])
 
 # ==========================================
-# PESTAÑA 1: LA LISTA DEL SUPERMERCADO
+# PESTAÑA 1: LISTA (Optimizada para móvil)
 # ==========================================
 with tab_lista:
-    if st.button("🗑️ Vaciar toda la lista", type="primary", use_container_width=True):
+    if st.button("🗑️ Vaciar lista", type="primary", use_container_width=True):
         requests.delete(f"{URL}/rest/v1/lista_compra?id=gt.0", headers=HEADERS)
         st.rerun()
         
-    st.divider()
-
-    st.subheader("📝 Pendientes")
-    # Usamos .get("comprado", False) por si la columna no existe en la base de datos
+    st.subheader("Pendientes")
     for item in [i for i in items_lista if not i.get("comprado", False)]:
-        col_check, col_del = st.columns([8, 2])
-        with col_check:
-            # Si se marca la casilla...
-            if st.checkbox(item["producto"], key=f"pend_{item['id']}"):
-                res = requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": True}, headers=HEADERS)
-                if res.status_code in [200, 204]:
-                    st.rerun()
-                else:
-                    # ¡AQUÍ ESTÁ EL CHIVATO!
-                    st.error(f"Fallo en Supabase: {res.text}")
-        with col_del:
-            if st.button("❌", key=f"del_{item['id']}"):
+        # Usamos contenedores para forzar que queden alineados
+        with st.container():
+            c1, c2 = st.columns([0.85, 0.15])
+            if c1.checkbox(item["producto"], key=f"pend_{item['id']}"):
+                requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": True}, headers=HEADERS)
+                st.rerun()
+            if c2.button("❌", key=f"del_{item['id']}"):
                 requests.delete(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", headers=HEADERS)
                 st.rerun()
 
-    st.divider()
-    
     st.subheader("🛒 En el carro")
     for item in [i for i in items_lista if i.get("comprado", False)]:
-        col_check, col_del = st.columns([8, 2])
-        with col_check:
-            # Si se desmarca la casilla...
-            if not st.checkbox(item["producto"], value=True, key=f"comp_{item['id']}"):
-                res = requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": False}, headers=HEADERS)
-                if res.status_code in [200, 204]:
-                    st.rerun()
-                else:
-                    st.error(f"Fallo en Supabase: {res.text}")
-        with col_del:
-            if st.button("❌", key=f"del_comp_{item['id']}"):
+        with st.container():
+            c1, c2 = st.columns([0.85, 0.15])
+            if not c1.checkbox(item["producto"], value=True, key=f"comp_{item['id']}"):
+                requests.patch(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", json={"comprado": False}, headers=HEADERS)
+                st.rerun()
+            if c2.button("❌", key=f"del_comp_{item['id']}"):
                 requests.delete(f"{URL}/rest/v1/lista_compra?id=eq.{item['id']}", headers=HEADERS)
                 st.rerun()
 
 # ==========================================
-# PESTAÑA 2: AÑADIR PRODUCTOS
+# PESTAÑA 2: AÑADIR (Botones más compactos)
 # ==========================================
 with tab_comprar:
-    st.subheader("⚡ Añadir rápido")
     if productos_habituales:
-        cols = st.columns(3) 
+        cols = st.columns(2) # 2 columnas es más seguro para móviles
         for i, prod in enumerate(productos_habituales):
-            ya_esta_añadido = prod.lower() in nombres_en_lista
-            if cols[i % 3].button(prod, key=f"cat_{i}", disabled=ya_esta_añadido, use_container_width=True):
+            ya_esta = prod.lower() in nombres_en_lista
+            if cols[i % 2].button(prod, key=f"cat_{i}", disabled=ya_esta, use_container_width=True):
                 requests.post(f"{URL}/rest/v1/lista_compra", json={"producto": prod}, headers=HEADERS)
                 st.rerun()
     
     st.divider()
-    producto_nuevo = st.text_input("✍️ O escribir algo puntual:")
-    if st.button("Añadir a la lista", key="btn_nuevo"):
+    producto_nuevo = st.text_input("✍️ Producto puntual:")
+    if st.button("Añadir a la lista", use_container_width=True):
         if producto_nuevo != "":
-            if producto_nuevo.lower() in nombres_en_lista:
-                st.warning(f"¡{producto_nuevo} ya está en tu lista!")
-            else:
-                requests.post(f"{URL}/rest/v1/lista_compra", json={"producto": producto_nuevo}, headers=HEADERS)
-                st.rerun()
+            requests.post(f"{URL}/rest/v1/lista_compra", json={"producto": producto_nuevo}, headers=HEADERS)
+            st.rerun()
 
 # ==========================================
-# PESTAÑA 3: GESTIÓN DE LA DESPENSA BASE
+# PESTAÑA 3: DESPENSA
 # ==========================================
 with tab_despensa:
-    st.subheader("Añadir a mis habituales")
-    nuevo_catalogo = st.text_input("Nombre del producto:")
-    if st.button("Guardar en despensa"):
-        if nuevo_catalogo != "":
-            res = requests.post(f"{URL}/rest/v1/catalogo", json={"nombre": nuevo_catalogo}, headers=HEADERS)
-            if res.status_code in [200, 201]:
-                st.success(f"¡{nuevo_catalogo} añadido a tu despensa!")
-                st.rerun()
-            else:
-                st.error(f"Error al guardar: {res.text}")
-        
-    st.divider()
-    st.write("**Tus productos guardados:**")
-    for p in productos_habituales:
-        st.markdown(f"- {p}")
+    nuevo_catalogo = st.text_input("Nuevo producto fijo:")
+    if st.button("Guardar en despensa", use_container_width=True):
+        requests.post(f"{URL}/rest/v1/catalogo", json={"nombre": nuevo_catalogo}, headers=HEADERS)
+        st.rerun()
